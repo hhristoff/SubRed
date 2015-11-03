@@ -44,24 +44,33 @@ class SubRedRefreshIssueCommand(sublime_plugin.TextCommand):
 
 # Redmine: List Queries
 class SubRedGetQueryCommand(sublime_plugin.TextCommand):
+  query = '';
+  project_ids = {};
   def run(self,edit):
+    def on_done_two(i):
+      if i > -1:
+        self.view.run_command( 'redmine_fetch_query', {'project_id': self.project_ids[i], 'query_id': self.query} )
     def on_done(i):
       if i > -1:
-        query = query_ids[i]
-        project_id = query_projects[i]
-        self.view.run_command( 'redmine_fetch_query', {'project_id': project_id, 'query_id': query} )
-
+        self.query = query_ids[i]
+        redmine = SubRedmine.connect()
+        issues = redmine.issue.filter(project_id='',query_id=self.query)
+        query_projects = []
+        i = 0
+        for issue in issues:
+          if not issue.project.name in query_projects:
+            query_projects.append(issue.project.name)
+            self.project_ids[i] = issue.project.id
+            i += 1
+        self.view.window().show_quick_panel(query_projects, on_done_two)
+    
     redmine = SubRedmine.connect()
     queries = redmine.query.all()
     query_names = []
     query_ids = []
-    query_projects = []
     for query in queries:
-      query_names.append(query.name)
+      query_names.append(query.name)    
       query_ids.append(query.id)
-      if hasattr(query, 'project_id'):
-        query_projects.append(query.project_id)
-
     self.view.window().show_quick_panel(query_names, on_done)
 
 # Redmine: Set Status
@@ -150,7 +159,7 @@ class RedmineFetchQueryCommand(sublime_plugin.TextCommand):
     content = 'Total: %s\n' % len(issues)
     content += '-------------------------------------------\n'
     for issue in issues:
-      content += '#%r\t\t%s\n' % (issue.id,issue.subject)
+      content += '#%r\t\t%s - %s - %s - %s%%\n' % (issue.id,issue.subject,issue.status,issue.priority,issue.done_ratio)
 
     r.insert(edit, 0, content)
     r.set_read_only(True)
